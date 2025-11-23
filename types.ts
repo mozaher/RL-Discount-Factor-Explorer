@@ -14,8 +14,9 @@ export interface GridCell {
   x: number;
   y: number;
   type: CellType;
-  value: number; // The calculated V(s)
-  stepsToReward: number;
+  value: number; // The calculated V(s) based on nearest fish (for heatmap)
+  stepsToReward: number; // Distance to nearest fish
+  stepsFromStart: number; // Distance from the initial starting position
   isPath: boolean; // If it's on the shortest path
 }
 

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { GRID_SIZE, Coordinate, REWARD_VALUE } from './types';
 import { calculateGridValues, findShortestPath } from './utils/rlLogic';
 import { GridBoard } from './components/GridBoard';
-import { Settings, RotateCcw, Map, MousePointer2, Fish as FishIcon, BrickWall, HelpCircle, Info } from 'lucide-react';
+import { RotateCcw, MousePointer2, Fish as FishIcon, BrickWall, HelpCircle, Info } from 'lucide-react';
 
 // Preset Scenario from the user's image
 const INITIAL_WALLS = [
@@ -20,6 +20,8 @@ const DEFAULT_GAMMA = 0.9;
 function App() {
   // --- State ---
   const [agentPos, setAgentPos] = useState<Coordinate>({ x: 1, y: 1 });
+  // Start position is fixed until reset. This determines the values on the board.
+  const [startPos, setStartPos] = useState<Coordinate>({ x: 1, y: 1 });
   const [walls, setWalls] = useState<Set<string>>(new Set(INITIAL_WALLS));
   const [fishes, setFishes] = useState<Coordinate[]>([{ x: 9, y: 5 }, { x: 3, y: 2 }]);
   const [gamma, setGamma] = useState<number>(DEFAULT_GAMMA);
@@ -28,23 +30,32 @@ function App() {
 
   // --- Derived State (RL Logic) ---
   const gridData = useMemo(() => {
-    return calculateGridValues(walls, fishes, gamma);
-  }, [walls, fishes, gamma]);
+    return calculateGridValues(walls, fishes, gamma, startPos);
+  }, [walls, fishes, gamma, startPos]);
 
   const pathCells = useMemo(() => {
     return findShortestPath(agentPos, fishes, walls);
   }, [agentPos, fishes, walls]);
 
   const currentCell = gridData[agentPos.y]?.[agentPos.x];
-  const currentValue = currentCell ? currentCell.value : 0;
-  const stepsToReward = currentCell ? currentCell.stepsToReward : Infinity;
+  // Calculate value based on start position for sidebar consistency? 
+  // Or show instantaneous value? 
+  // Let's show instantaneous Value V(s) in sidebar (proximity to fish) as that's helpful feedback
+  // while the board shows the fixed scenario.
+  const instantaneousValue = currentCell ? currentCell.value : 0;
+  
+  // Calculate value relative to start for display
+  const stepsFromStart = currentCell ? currentCell.stepsFromStart : Infinity;
+  const valueFromStart = stepsFromStart !== Infinity ? REWARD_VALUE * Math.pow(gamma, stepsFromStart) : 0;
 
   // --- Handlers ---
   
   const handleReset = () => {
     setWalls(new Set(INITIAL_WALLS));
     setFishes([{ x: 9, y: 5 }, { x: 3, y: 2 }]);
-    setAgentPos({ x: 1, y: 1 });
+    const initialPos = { x: 1, y: 1 };
+    setAgentPos(initialPos);
+    setStartPos(initialPos);
     setGamma(0.9);
   };
 
@@ -80,6 +91,7 @@ function App() {
       // Move Agent (Teleport)
       if (!walls.has(key)) {
         setAgentPos({ x, y });
+        // NOTE: We do NOT update startPos here, as per user request
       }
     }
   };
@@ -121,7 +133,8 @@ function App() {
             Discount Factor (<span className="font-serif italic">γ</span>)
           </h1>
           <p className="text-slate-400 text-sm leading-relaxed">
-            Explore how immediate rewards are valued higher than distant ones in Reinforcement Learning.
+            The grid numbers show the <strong>distance from the start</strong>. 
+            The fish value is calculated based on this fixed distance.
           </p>
         </div>
 
@@ -141,13 +154,16 @@ function App() {
               <span>{gamma.toFixed(2)}</span>
             </div>
             <div className="flex justify-between border-b border-slate-700 pb-1">
-              <span className="text-yellow-400">t (Steps)</span>
-              <span>{stepsToReward === Infinity ? '∞' : stepsToReward}</span>
+              <span className="text-yellow-400">t (Steps from Start)</span>
+              <span>{stepsFromStart === Infinity ? '∞' : stepsFromStart}</span>
             </div>
             <div className="flex justify-between pt-2 font-bold text-lg">
-              <span>Value</span>
-              <span className="text-orange-400">{currentValue.toFixed(2)}</span>
+              <span>Current Value</span>
+              <span className="text-orange-400">{valueFromStart.toFixed(2)}</span>
             </div>
+          </div>
+          <div className="mt-2 text-[10px] text-slate-500 text-center">
+             (Calculated from Start Position)
           </div>
         </div>
 
@@ -200,7 +216,7 @@ function App() {
               onClick={() => setInteractionMode('fish')}
               className={`p-3 rounded-lg border flex flex-col items-center gap-1 transition-all ${
                 interactionMode === 'fish' 
-                  ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' 
+                  ? 'bg-red-600/20 border-red-500 text-red-300' 
                   : 'bg-slate-800 border-slate-700 hover:bg-slate-750'
               }`}
             >
@@ -237,6 +253,7 @@ function App() {
              pathCells={pathCells}
              onCellClick={handleCellClick}
              mode={interactionMode}
+             gamma={gamma}
            />
         </div>
 
@@ -248,10 +265,10 @@ function App() {
                <button onClick={() => setShowInfo(false)} className="text-slate-500 hover:text-white">&times;</button>
             </div>
             <ul className="space-y-2 text-slate-300 list-disc list-inside">
-              <li>Use <strong>Arrow Keys</strong> or click to move the Agent.</li>
-              <li>Observe the <strong>Value</strong> decrease as you move away from the fish.</li>
-              <li>Adjust <strong>Gamma (γ)</strong> to see how "patience" affects value. High γ means distant rewards are still valuable.</li>
-              <li>Select <strong>Wall</strong> or <strong>Reward</strong> mode to customize the map.</li>
+              <li><strong>Grid Numbers:</strong> Show steps from the <strong>original starting position</strong>.</li>
+              <li><strong>Fish Value:</strong> Shows the discounted reward based on distance from start.</li>
+              <li>Move the agent to explore, but note that grid values remain fixed based on the start point.</li>
+              <li>Adjust <strong>Gamma (γ)</strong> to see how the fish value changes.</li>
             </ul>
           </div>
         )}

@@ -11,50 +11,49 @@ const DIRECTIONS = [
 /**
  * Calculates the value of every cell in the grid based on the distance to the nearest fish
  * and the discount factor gamma.
+ * Also calculates distance from startPos.
  */
 export const calculateGridValues = (
   walls: Set<string>,
   fishes: Coordinate[],
-  gamma: number
+  gamma: number,
+  startPos: Coordinate
 ): GridCell[][] => {
   // Initialize grid
   const grid: GridCell[][] = Array.from({ length: GRID_SIZE }, (_, y) =>
     Array.from({ length: GRID_SIZE }, (_, x) => ({
       x,
       y,
-      type: CellType.EMPTY, // Default, will be overridden by renderer logic for static items
+      type: CellType.EMPTY,
       value: 0,
       stepsToReward: Infinity,
+      stepsFromStart: Infinity,
       isPath: false,
     }))
   );
 
-  // Breadth-First Search to find shortest path from ANY fish to all cells
-  // We start from all fishes simultaneously
-  const queue: { x: number; y: number; steps: number }[] = [];
-  const visited = new Set<string>();
+  // 1. BFS from Fishes to calculate V(s) for Heatmap (Proximity to Fish)
+  const queueFish: { x: number; y: number; steps: number }[] = [];
+  const visitedFish = new Set<string>();
 
   fishes.forEach((fish) => {
-    queue.push({ x: fish.x, y: fish.y, steps: 0 });
-    visited.add(`${fish.x},${fish.y}`);
-    // The fish itself has value = REWARD_VALUE * gamma^0 = REWARD_VALUE
+    queueFish.push({ x: fish.x, y: fish.y, steps: 0 });
+    visitedFish.add(`${fish.x},${fish.y}`);
     grid[fish.y][fish.x].stepsToReward = 0;
     grid[fish.y][fish.x].value = REWARD_VALUE;
   });
 
-  while (queue.length > 0) {
-    const { x, y, steps } = queue.shift()!;
+  while (queueFish.length > 0) {
+    const { x, y, steps } = queueFish.shift()!;
 
     for (const dir of DIRECTIONS) {
       const nx = x + dir.dx;
       const ny = y + dir.dy;
       const key = `${nx},${ny}`;
 
-      // Check bounds
       if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
-        // Check walls and visited
-        if (!walls.has(key) && !visited.has(key)) {
-          visited.add(key);
+        if (!walls.has(key) && !visitedFish.has(key)) {
+          visitedFish.add(key);
           
           const newSteps = steps + 1;
           const discountedValue = REWARD_VALUE * Math.pow(gamma, newSteps);
@@ -62,7 +61,39 @@ export const calculateGridValues = (
           grid[ny][nx].stepsToReward = newSteps;
           grid[ny][nx].value = discountedValue;
 
-          queue.push({ x: nx, y: ny, steps: newSteps });
+          queueFish.push({ x: nx, y: ny, steps: newSteps });
+        }
+      }
+    }
+  }
+
+  // 2. BFS from Start Position to calculate stepsFromStart (Time steps t)
+  const queueStart: { x: number; y: number; steps: number }[] = [];
+  const visitedStart = new Set<string>();
+
+  // Only start if startPos is valid (not a wall)
+  if (!walls.has(`${startPos.x},${startPos.y}`)) {
+    queueStart.push({ x: startPos.x, y: startPos.y, steps: 0 });
+    visitedStart.add(`${startPos.x},${startPos.y}`);
+    grid[startPos.y][startPos.x].stepsFromStart = 0;
+  }
+
+  while (queueStart.length > 0) {
+    const { x, y, steps } = queueStart.shift()!;
+
+    for (const dir of DIRECTIONS) {
+      const nx = x + dir.dx;
+      const ny = y + dir.dy;
+      const key = `${nx},${ny}`;
+
+      if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+        if (!walls.has(key) && !visitedStart.has(key)) {
+          visitedStart.add(key);
+          
+          const newSteps = steps + 1;
+          grid[ny][nx].stepsFromStart = newSteps;
+
+          queueStart.push({ x: nx, y: ny, steps: newSteps });
         }
       }
     }
