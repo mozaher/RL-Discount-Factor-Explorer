@@ -1,0 +1,5 @@
+{
+  "name": "RL Discount Factor Explorer",
+  "description": "An interactive Reinforcement Learning grid world to visualize how the Discount Factor (Gamma) affects the value of future rewards over time and distance.",
+  "requestFramePermissions": []
+}
